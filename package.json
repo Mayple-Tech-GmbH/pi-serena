@@ -1,0 +1,32 @@
+{
+  "name": "pi-serena",
+  "version": "0.1.0",
+  "description": "Serena-backed semantic tooling for Pi with replace-lsp as the default mode",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "extension",
+    "serena",
+    "lsp"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
