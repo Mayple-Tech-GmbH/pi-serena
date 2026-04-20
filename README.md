@@ -1,6 +1,43 @@
 # pi-serena
 
-`pi-serena` is a standalone Pi package that makes Serena the default semantic backend for Pi and uses `replace-lsp` as the default mode.
+`pi-serena` is a standalone Pi package that swaps Pi's generic symbol tools for a curated [Serena](https://github.com/oraios/serena)-backed tool set, so semantic navigation and refactors are faster and more reliable inside Pi.
+
+## Purpose
+
+- prefer Serena for semantic navigation and refactors in Pi
+- keep Pi built-ins for general editing and shell work
+- disable raw Pi `lsp` if it is present, so the semantic tool path is clear by default
+
+## What this package is
+
+[Serena](https://github.com/oraios/serena) is an MCP toolkit for semantic code retrieval, editing, and refactoring backed by language servers.
+
+`pi-serena` integrates Serena into Pi as a normal package and exposes a curated Serena tool surface under Pi-friendly tool names such as:
+
+- `find_symbol`
+- `find_referencing_symbols`
+- `get_symbols_overview`
+- `rename_symbol`
+- `replace_symbol_body`
+
+The goal is simple: when you ask Pi symbol-aware questions, it should prefer semantic tooling instead of falling back to plain text search.
+
+## How it works
+
+- `pi-serena` starts and manages a dedicated Serena MCP server for the current Pi session
+- it registers a focused set of Serena tools into Pi under familiar tool names
+- if raw Pi `lsp` is present, it disables it by default for the session
+- Pi still keeps its normal built-ins for shell work, file reads, and text edits
+
+This gives you Serena for symbol-level navigation and refactors without replacing Pi's general-purpose workflow.
+
+## Why use this instead of wiring plain Serena MCP yourself?
+
+- it gives Pi a curated tool surface instead of the full Serena catalog
+- it keeps Pi's normal shell and file workflow intact
+- it disables raw Pi `lsp` automatically when present, so you do not have to manage that policy yourself
+- it adds Pi-specific commands such as `/serena-status`, `/serena-restart`, and `/serena-mode`
+- it makes Serena feel native in Pi instead of behaving like a separate generic MCP integration
 
 ## Quick start
 
@@ -38,24 +75,6 @@ After that, start Pi normally:
 pi
 ```
 
-### Do I need to disable `lsp`?
-
-No. In the default `replace-lsp` mode, `pi-serena` hides raw Pi `lsp` from the active tool set for the session. You can keep `npm:lsp-pi` installed.
-
-If you want both Serena and raw `lsp`, switch to:
-
-```text
-/serena-mode coexist
-/reload
-```
-
-If you want a broader Serena-only surface, use:
-
-```text
-/serena-mode maximal
-/reload
-```
-
 ### First commands to try
 
 ```text
@@ -64,26 +83,6 @@ find_symbol
 find_referencing_symbols
 rename_symbol
 ```
-## Packaging smoke checklist
-
-Before adding runtime behavior, this package should satisfy these baseline expectations:
-
-- package name is `pi-serena`
-- the Pi manifest points at `./extensions`
-- tests run with `node --experimental-strip-types --test tests/*.test.ts`
-- the default mode is `replace-lsp`
-
-## Purpose
-
-- prefer Serena for semantic navigation and refactors
-- keep Pi built-ins for general editing and shell work
-- disable raw Pi `lsp` by default through package-controlled mode behavior
-
-## Mode summary
-
-- `replace-lsp` is the default mode
-- `coexist` keeps raw Pi `lsp` available as a fallback
-- `maximal` allows a broader Serena surface when explicitly enabled
 
 ## Default Serena tool surface
 
@@ -120,36 +119,31 @@ catalog.
 - **Memory tools** (`create_memory`, `delete_memory`, …) — Pi manages its own
   memory layer.
 
-## Runtime wiring (Task 6)
+## More details on how it works
 
-The extension entry point (`extensions/pi-serena/index.ts`) wires the Pi
-lifecycle to the Serena server and client managers.
+The extension entry point (`extensions/pi-serena/index.ts`) wires the Pi lifecycle to the Serena server and client managers.
 
-### Lifecycle
+### Session lifecycle
 
 | Hook | Action |
 |---|---|
 | `session_start` | Read `.pi/settings.json`, resolve config, create server/client managers, register Serena tools, apply lsp policy |
 | `session_shutdown` | `resetClient()` (close MCP connection), `stop()` (kill Serena process) |
 
-### Lazy server start
+### Serena server lifecycle
 
-The Serena process is **not started on `session_start`**.  It starts lazily
+The `SerenaServerManager` in `src/serena-server.ts` manages a single Serena process per Pi session.
+
+#### Lazy server start
+
+The Serena process is **not started on `session_start`**. It starts lazily
 when the first Serena tool is invoked or when `/serena-restart` is called.
 `SerenaServerManager.start()` is idempotent.
 
-### lsp policy
-
-| Mode | Action |
-|---|---|
-| `replace-lsp` | Calls `setActiveTools(active.filter(t => t !== 'lsp'))` to remove raw Pi lsp. All other tools are preserved. |
-| `coexist` | Active tool set is untouched — Pi lsp stays available alongside Serena. |
-| `maximal` | Same as `replace-lsp` (raw lsp removed). |
-
-### Settings persistence
+#### Settings persistence
 
 Mode changes from `/serena-mode` are written to `<cwd>/.pi/settings.json`
-under the `serena` key.  Other keys in that file are preserved.
+under the `serena` key. Other keys in that file are preserved.
 
 ```json
 {
@@ -159,7 +153,7 @@ under the `serena` key.  Other keys in that file are preserved.
 }
 ```
 
-### Commands
+#### Commands
 
 | Command | Description |
 |---|---|
@@ -167,7 +161,7 @@ under the `serena` key.  Other keys in that file are preserved.
 | `/serena-restart` | Stop and restart the Serena process |
 | `/serena-mode [mode]` | Show current mode, or set a new one (persisted) |
 
-### Operator guidance
+#### Operator guidance
 
 - **Default behavior:** `replace-lsp` removes raw Pi `lsp` from the active tool set but keeps Pi built-ins such as `read`, `bash`, `edit`, and `write` available.
 - **When to use `coexist`:** switch to `coexist` if you want the curated Serena semantic tools **and** raw `lsp` available at the same time.
@@ -176,26 +170,7 @@ under the `serena` key.  Other keys in that file are preserved.
 - **What Serena replaces vs. what Pi still owns:** Serena handles semantic symbol search and refactors; Pi still owns general shell work and text/file editing.
 - **Rollout note:** `npm:lsp-pi` may still remain installed during rollout. In `replace-lsp` mode, pi-serena hides raw `lsp` by policy instead of requiring package removal on day one.
 
-### Tool-set compromise for mode switching
-
-Tools are registered once per name for the lifetime of the Pi process.  Moving
-from `replace-lsp` to `maximal` adds the extra maximal tools on the next
-session.  The reverse (maximal → replace-lsp) leaves the maximal-only tools in
-the registered set; they remain callable.  This is a known minimal compromise
-and can be addressed in a future task with explicit `setActiveTools` gating.
-
-## Layout
-
-- `extensions/pi-serena/index.ts` — extension entry point
-- `src/` — config, lifecycle, tool-policy, and client/server helpers
-- `tests/` — node test suite
-
-## Serena server lifecycle
-
-The `SerenaServerManager` in `src/serena-server.ts` manages a single Serena
-process per Pi session.
-
-### Launcher strategy
+#### Launcher strategy
 
 1. **Installed binary** — if `serena` is found on PATH, it is used directly.
 2. **Pinned uvx** — otherwise, `uvx -p 3.13 --from serena-agent==<version> serena` is used.
@@ -205,14 +180,14 @@ process per Pi session.
 Pi launches Serena with `start-mcp-server --transport streamable-http --host 127.0.0.1`
 and disables the Serena web dashboard for agent-managed sessions.
 
-### Default values
+#### Default values
 
 | Name | Default |
 |---|---|
 | `DEFAULT_PORT` | `40000` |
 | `DEFAULT_CONTEXT` | `"ide"` |
 
-### Lifecycle API
+#### Lifecycle API
 
 ```ts
 const mgr = new SerenaServerManager({ binaryChecker, spawner });
@@ -223,9 +198,44 @@ mgr.getState();                              // snapshot for /serena-status
 ```
 
 `SerenaServerManager` is used by the extension runtime to manage the Serena server lifecycle for each Pi session.
+## Modes
 
-## Test
+### Mode summary
 
-```bash
-npm test
+- `replace-lsp` is the default mode
+- `coexist` keeps raw Pi `lsp` available as a fallback
+- `maximal` allows a broader Serena surface when explicitly enabled
+
+### lsp policy
+
+| Mode | Action |
+|---|---|
+| `replace-lsp` | Calls `setActiveTools(active.filter(t => t !== 'lsp'))` to remove raw Pi lsp. All other tools are preserved. |
+| `coexist` | Active tool set is untouched — Pi lsp stays available alongside Serena. |
+| `maximal` | Same as `replace-lsp` (raw lsp removed). |
+
+### Do I need to disable `lsp`?
+
+No. `pi-serena` disables raw Pi `lsp` automatically if it is present. Many setups will not have raw `lsp` installed at all, so there is nothing extra to do.
+
+If you want both Serena and raw `lsp`, switch to:
+
+```text
+/serena-mode coexist
+/reload
 ```
+
+If you want a broader Serena-only surface, use:
+
+```text
+/serena-mode maximal
+/reload
+```
+
+### Tool-set compromise for mode switching
+
+Tools are registered once per name for the lifetime of the Pi process. Moving
+from `replace-lsp` to `maximal` adds the extra maximal tools on the next
+session. The reverse (maximal → replace-lsp) leaves the maximal-only tools in
+the registered set; they remain callable. This is a known minimal compromise
+and can be addressed in a future task with explicit `setActiveTools` gating.
