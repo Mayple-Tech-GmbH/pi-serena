@@ -28,6 +28,7 @@ import {
   type StartConfig,
 } from "../../src/serena-server.ts";
 import { createClientManager } from "../../src/serena-client.ts";
+import { syncProjectRoot } from "../../src/project-root.ts";
 import { getSerenaToolDefinitionsForMode } from "../../src/serena-tools.ts";
 import { shouldKeepRawLsp } from "../../src/tool-policy.ts";
 import { SUPPORTED_MODES, type SerenaMode } from "../../src/modes.ts";
@@ -128,6 +129,8 @@ export default function piSerenaExtension(pi: ExtensionAPI): void {
             };
           }
 
+          startCfg = syncProjectRoot(_ctx.cwd, startCfg, serverMgr, clientMgr);
+
           if (name === "restart_language_server") {
             await clientMgr.resetClient();
             serverMgr.stop();
@@ -217,6 +220,10 @@ export default function piSerenaExtension(pi: ExtensionAPI): void {
         ctx.ui.notify("Serena: not initialized", "warning");
         return;
       }
+      if (clientMgr) {
+        clientMgr.setProjectRoot(ctx.cwd);
+      }
+      startCfg = { ...startCfg, projectRoot: ctx.cwd };
       serverMgr.stop();
       serverMgr.start(startCfg);
       ctx.ui.notify("Serena server restarted", "info");
