@@ -157,7 +157,7 @@ under the `serena` key. Other keys in that file are preserved.
 
 | Command | Description |
 |---|---|
-| `/serena-status` | Show server process state, mode, port, and command |
+| `/serena-status` | Show Serena session state plus live server state, including the current port and command |
 | `/serena-restart` | Stop and restart the Serena process |
 | `/serena-mode [mode]` | Show current mode, or set a new one (persisted) |
 
@@ -166,7 +166,7 @@ under the `serena` key. Other keys in that file are preserved.
 - **Default behavior:** `replace-lsp` removes raw Pi `lsp` from the active tool set but keeps Pi built-ins such as `read`, `bash`, `edit`, and `write` available.
 - **When to use `coexist`:** switch to `coexist` if you want the curated Serena semantic tools **and** raw `lsp` available at the same time.
 - **When to use `/serena-restart`:** use it after edits that happened outside Serena-backed tools, or when semantic results look stale.
-- **Directory changes:** pi-serena follows `ctx.cwd` on Serena tool calls. If you `cd` to a different project in the same Pi session, the next Serena tool call will rebind the server to that project root automatically.
+- **Directory changes:** pi-serena follows `ctx.cwd` on Serena tool calls. If you `cd` to a different project in the same Pi session, the next Serena tool call will lazily restart Serena for that project root. The active project root is only updated after readiness succeeds.
 - **`restart_language_server` behavior:** the Serena-facing tool of that name is implemented by pi-serena as a local client reset + Serena process restart, so it remains available even when Serena does not advertise that optional MCP tool in the active context.
 - **What Serena replaces vs. what Pi still owns:** Serena handles semantic symbol search and refactors; Pi still owns general shell work and text/file editing.
 - **Rollout note:** `npm:lsp-pi` may still remain installed during rollout. In `replace-lsp` mode, pi-serena hides raw `lsp` by policy instead of requiring package removal on day one.
@@ -181,11 +181,19 @@ under the `serena` key. Other keys in that file are preserved.
 Pi launches Serena with `start-mcp-server --transport streamable-http --host 127.0.0.1`
 and disables the Serena web dashboard for agent-managed sessions.
 
+#### Runtime port behavior
+
+- Each Pi session allocates its own **session-unique localhost port** for Serena.
+- The initially chosen port is provisional until the first successful startup.
+- After startup succeeds, that port stays stable for the rest of the Pi session.
+- If the user asks for `/serena-status` before the first Serena-backed tool call, pi-serena reports `Server: not used yet` plus the provisional session port from in-memory session state.
+- Only `serena.mode` is persisted to `.pi/settings.json`; runtime port state is not persisted.
+
 #### Default values
 
 | Name | Default |
 |---|---|
-| `DEFAULT_PORT` | `40000` |
+| `DEFAULT_PORT` | `40000` (test/documentation constant; normal runtime uses a session-unique port) |
 | `DEFAULT_CONTEXT` | `"ide"` |
 
 #### Lifecycle API

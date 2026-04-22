@@ -25,5 +25,7 @@ export function syncProjectRoot(
     serverMgr.restart(cwd);
   }
 
-  return { ...startCfg, projectRoot: cwd };
+  // The extension now commits the new active project root only after
+  // readiness succeeds, so this helper leaves the active config unchanged.
+  return startCfg;
 }

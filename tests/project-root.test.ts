@@ -41,7 +41,7 @@ test("syncProjectRoot() leaves state unchanged when cwd already matches", () => 
   assert.equal(clientRoot, null);
 });
 
-test("syncProjectRoot() updates config without restart when Serena is stopped", () => {
+test("syncProjectRoot() keeps the active root unchanged when Serena is stopped", () => {
   const startCfg: StartConfig = { projectRoot: "/old", port: 40000, context: "ide" };
   let restartedTo: string | null = null;
   let clientRoot: string | null = null;
@@ -62,12 +62,12 @@ test("syncProjectRoot() updates config without restart when Serena is stopped", 
     },
   );
 
-  assert.deepEqual(next, { ...startCfg, projectRoot: "/new" });
+  assert.deepEqual(next, startCfg);
   assert.equal(restartedTo, null);
   assert.equal(clientRoot, "/new");
 });
 
-test("syncProjectRoot() restarts Serena when the active root changes", () => {
+test("syncProjectRoot() does not commit the new root before readiness succeeds", () => {
   const startCfg: StartConfig = { projectRoot: "/old", port: 40000, context: "ide" };
   let restartedTo: string | null = null;
   let clientRoot: string | null = null;
@@ -88,7 +88,7 @@ test("syncProjectRoot() restarts Serena when the active root changes", () => {
     },
   );
 
-  assert.deepEqual(next, { ...startCfg, projectRoot: "/new" });
+  assert.deepEqual(next, startCfg);
   assert.equal(restartedTo, "/new");
   assert.equal(clientRoot, "/new");
 });
